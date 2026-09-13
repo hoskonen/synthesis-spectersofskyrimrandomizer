@@ -83,14 +83,14 @@ public static class DryRunPatcher
                 winningState);
         }).ToArray();
 
-        WriteReport(output, settings, pairing, plans);
-
         var finalPatchRecordCount = state.PatchMod.EnumerateMajorRecords().Count();
         if (finalPatchRecordCount != initialPatchRecordCount)
         {
             throw new InvalidOperationException(
                 "Dry-run invariant violated: the patcher changed the output plugin record count.");
         }
+
+        WriteReport(output, settings, pairing, plans);
     }
 
     private static INpcGetter ResolveUniqueSourceNpc(ISkyrimModGetter sourceMod, string editorId)
@@ -236,10 +236,12 @@ public static class DryRunPatcher
         var unexpected = plans.Count(plan => plan.WinningState == WinningRecordState.UnexpectedBase);
         var missingOrDeleted = missing + deleted;
 
+        output.WriteLine("============================================================");
         output.WriteLine("Specters of Skyrim Randomizer — Dry Run");
+        output.WriteLine("============================================================");
         output.WriteLine();
         output.WriteLine($"Source plugin: {SourceModKey.FileName}");
-        output.WriteLine($"Algorithm: {DeterministicSelector.AlgorithmVersion}");
+        output.WriteLine($"Algorithm version: {DeterministicSelector.AlgorithmVersion}");
         output.WriteLine($"Probability: {settings.Probability.ToString("0.################", CultureInfo.InvariantCulture)}%");
         output.WriteLine($"Seed: {settings.Seed.ToString(CultureInfo.InvariantCulture)}");
         output.WriteLine();
@@ -266,7 +268,7 @@ public static class DryRunPatcher
         }
 
         output.WriteLine();
-        output.WriteLine("No records were modified.");
+        output.WriteLine("Dry run complete. No Skyrim records were modified.");
     }
 
     private static string FormatFormKey(FormKey formKey)

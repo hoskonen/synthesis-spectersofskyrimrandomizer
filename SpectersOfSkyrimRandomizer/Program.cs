@@ -22,6 +22,7 @@ public static class Program
 
     public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
     {
-        DryRunPatcher.Run(state, _settings.Value, Console.Out);
+        DryRunPatcher.Run(state, _settings.Value, Console.Error);
+        Console.Error.Flush();
     }
 }

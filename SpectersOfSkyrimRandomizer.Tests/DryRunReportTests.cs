@@ -27,8 +27,9 @@ public sealed class DryRunReportTests
             plans);
 
         var report = output.ToString();
+        StringAssert.Contains(report, "Specters of Skyrim Randomizer — Dry Run");
         StringAssert.Contains(report, "Source plugin: SpectersOfSkyrim.esp");
-        StringAssert.Contains(report, "Algorithm: v1");
+        StringAssert.Contains(report, "Algorithm version: v1");
         StringAssert.Contains(report, "Probability: 5%");
         StringAssert.Contains(report, "Seed: 38174");
         StringAssert.Contains(report, "Source candidates: 3");
@@ -37,7 +38,10 @@ public sealed class DryRunReportTests
         StringAssert.Contains(report, "Rejected encounters: 2");
         StringAssert.Contains(report, "Missing/deleted winning records: 2");
         StringAssert.Contains(report, "Pairing errors: 6");
-        StringAssert.Contains(report, "No records were modified.");
+        StringAssert.Contains(report, "Dry run complete. No Skyrim records were modified.");
+        Assert.IsTrue(report.TrimEnd().EndsWith(
+            "Dry run complete. No Skyrim records were modified.",
+            StringComparison.Ordinal));
     }
 
     [TestMethod]
