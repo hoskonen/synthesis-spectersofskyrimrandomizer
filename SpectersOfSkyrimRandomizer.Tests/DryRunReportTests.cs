@@ -69,6 +69,34 @@ public sealed class DryRunReportTests
         Assert.IsTrue(first >= 0 && first < second && second < third);
     }
 
+    [TestMethod]
+    public void ApplyReportContainsMutationCountsAndCompletionMessage()
+    {
+        var output = new StringWriter();
+        var plans = new[]
+        {
+            Plan(0x200, selected: false, WinningRecordState.Available),
+            Plan(0x100, selected: true, WinningRecordState.Available)
+        };
+
+        DryRunPatcher.WriteApplyReport(
+            output,
+            new Settings { Probability = 50.0, Seed = 12345, DryRun = false },
+            new PairingReport([], 0, 0, 0),
+            plans,
+            new MutationResult(1, 1, 0, 0));
+
+        var report = output.ToString();
+        StringAssert.Contains(report, "Specters of Skyrim Randomizer — Apply");
+        StringAssert.Contains(report, "Selected encounters: 1");
+        StringAssert.Contains(report, "Rejected encounters: 1");
+        StringAssert.Contains(report, "Specter overrides written: 1");
+        StringAssert.Contains(report, "Skeleton overrides written: 1");
+        StringAssert.Contains(report, "Total ACHR overrides written: 2");
+        StringAssert.Contains(report, "Already-disabled ACHR overrides skipped: 0");
+        Assert.IsTrue(report.TrimEnd().EndsWith("Patch complete.", StringComparison.Ordinal));
+    }
+
     private static PlannedEncounter Plan(uint id, bool selected, WinningRecordState state)
     {
         return new PlannedEncounter(new FormKey(SourceMod, id), selected, id, state);

@@ -1,11 +1,14 @@
 using System.Globalization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
 
 namespace SpectersOfSkyrimRandomizer;
+
+using PlacedNpcContext = IModContext<ISkyrimMod, ISkyrimModGetter, IPlacedNpc, IPlacedNpcGetter>;
 
 public static class DryRunPatcher
 {
@@ -27,11 +30,6 @@ public static class DryRunPatcher
         ArgumentNullException.ThrowIfNull(output);
 
         DeterministicSelector.ValidateProbability(settings.Probability);
-        if (!settings.DryRun)
-        {
-            throw new NotSupportedException(
-                "DryRun=false is not supported in milestone 1. Skyrim record mutation has not been implemented.");
-        }
 
         var initialPatchRecordCount = state.PatchMod.EnumerateMajorRecords().Count();
         var sourceListing = state.LoadOrder.ListedOrder
@@ -63,12 +61,16 @@ public static class DryRunPatcher
                 $"unmatched skeletons={pairing.UnmatchedSkeletons}, ambiguous={pairing.AmbiguousPairings}.");
         }
 
-        var candidateKeys = specters.Select(x => x.FormKey).ToHashSet();
-        var winningRecords = state.LoadOrder.PriorityOrder
+        var pairedSourceRecords = pairing.ValidPairs
+            .SelectMany(pair => new[] { pair.Specter, pair.Skeleton })
+            .ToArray();
+        var pairedSourceKeys = pairedSourceRecords.Select(record => record.FormKey).ToHashSet();
+        var winningContexts = state.LoadOrder.PriorityOrder
             .PlacedNpc()
             .WinningContextOverrides(state.LinkCache, includeDeletedRecords: true)
-            .Where(context => candidateKeys.Contains(context.Record.FormKey))
-            .ToDictionary(context => context.Record.FormKey, context => context.Record);
+            .Where(context => pairedSourceKeys.Contains(context.Record.FormKey))
+            .ToDictionary(context => context.Record.FormKey);
+        var winningRecords = winningContexts.ToDictionary(pair => pair.Key, pair => pair.Value.Record);
 
         var plans = specters.Select(specter =>
         {
@@ -83,14 +85,48 @@ public static class DryRunPatcher
                 winningState);
         }).ToArray();
 
-        var finalPatchRecordCount = state.PatchMod.EnumerateMajorRecords().Count();
-        if (finalPatchRecordCount != initialPatchRecordCount)
+        if (settings.DryRun)
         {
-            throw new InvalidOperationException(
-                "Dry-run invariant violated: the patcher changed the output plugin record count.");
+            var finalPatchRecordCount = state.PatchMod.EnumerateMajorRecords().Count();
+            if (finalPatchRecordCount != initialPatchRecordCount)
+            {
+                throw new InvalidOperationException(
+                    "Dry-run invariant violated: the patcher changed the output plugin record count.");
+            }
+
+            WriteReport(output, settings, pairing, plans);
+            return;
         }
 
-        WriteReport(output, settings, pairing, plans);
+        var winningDiagnostics = pairedSourceRecords
+            .Select(source => new
+            {
+                Source = source,
+                State = GetWinningState(source, winningRecords)
+            })
+            .ToArray();
+        var unsafeRecords = winningDiagnostics
+            .Where(item => item.State != WinningRecordState.Available)
+            .ToArray();
+        if (unsafeRecords.Length != 0)
+        {
+            throw new InvalidOperationException(
+                "Cannot apply the patch because one or more paired winning ACHRs are unavailable, deleted, " +
+                "or use an unexpected base: " +
+                string.Join(", ", unsafeRecords.Select(item =>
+                    $"{FormatFormKey(item.Source.FormKey)}={item.State}")) + ".");
+        }
+
+        var planBySpecter = plans.ToDictionary(plan => plan.SourceFormKey);
+        var mutationPlans = pairing.ValidPairs
+            .Select(pair => new PlannedMutation(
+                planBySpecter[pair.Specter.FormKey].Selected,
+                GetWinningContext(pair.Specter.FormKey, winningContexts),
+                GetWinningContext(pair.Skeleton.FormKey, winningContexts)))
+            .ToArray();
+        var mutationResult = EncounterMutator.Apply(state.PatchMod, mutationPlans);
+
+        WriteApplyReport(output, settings, pairing, plans, mutationResult);
     }
 
     private static INpcGetter ResolveUniqueSourceNpc(ISkyrimModGetter sourceMod, string editorId)
@@ -223,6 +259,16 @@ public static class DryRunPatcher
             : WinningRecordState.UnexpectedBase;
     }
 
+    private static PlacedNpcContext GetWinningContext(
+        FormKey formKey,
+        IReadOnlyDictionary<FormKey, PlacedNpcContext> winningContexts)
+    {
+        return winningContexts.TryGetValue(formKey, out var context)
+            ? context
+            : throw new InvalidOperationException(
+                $"Winning ACHR context is missing for {FormatFormKey(formKey)}.");
+    }
+
     internal static void WriteReport(
         TextWriter output,
         Settings settings,
@@ -269,6 +315,57 @@ public static class DryRunPatcher
 
         output.WriteLine();
         output.WriteLine("Dry run complete. No Skyrim records were modified.");
+    }
+
+    internal static void WriteApplyReport(
+        TextWriter output,
+        Settings settings,
+        PairingReport pairing,
+        IReadOnlyCollection<PlannedEncounter> plans,
+        MutationResult mutation)
+    {
+        var selected = plans.Where(plan => plan.Selected).ToArray();
+        var rejected = plans.Count - selected.Length;
+        var missing = plans.Count(plan => plan.WinningState is WinningRecordState.Missing or WinningRecordState.Deleted);
+        var unexpected = plans.Count(plan => plan.WinningState == WinningRecordState.UnexpectedBase);
+
+        output.WriteLine("============================================================");
+        output.WriteLine("Specters of Skyrim Randomizer — Apply");
+        output.WriteLine("============================================================");
+        output.WriteLine();
+        output.WriteLine($"Source plugin: {SourceModKey.FileName}");
+        output.WriteLine($"Algorithm version: {DeterministicSelector.AlgorithmVersion}");
+        output.WriteLine($"Probability: {settings.Probability.ToString("0.################", CultureInfo.InvariantCulture)}%");
+        output.WriteLine($"Seed: {settings.Seed.ToString(CultureInfo.InvariantCulture)}");
+        output.WriteLine();
+        output.WriteLine($"Source candidates: {plans.Count}");
+        output.WriteLine($"Valid encounter pairs: {pairing.ValidPairs.Count}");
+        output.WriteLine($"Selected encounters: {selected.Length}");
+        output.WriteLine($"Rejected encounters: {rejected}");
+        output.WriteLine();
+        output.WriteLine($"Specter overrides written: {mutation.SpecterOverridesWritten}");
+        output.WriteLine($"Skeleton overrides written: {mutation.SkeletonOverridesWritten}");
+        output.WriteLine($"Total ACHR overrides written: {mutation.TotalOverridesWritten}");
+        output.WriteLine($"Already-disabled ACHR overrides skipped: {mutation.TotalAlreadyDisabledSkipped}");
+        output.WriteLine();
+        output.WriteLine($"Missing/deleted winning records: {missing}");
+        output.WriteLine($"Unexpected winning records: {unexpected}");
+        output.WriteLine($"Pairing errors: {pairing.ErrorCount}");
+        output.WriteLine();
+        output.WriteLine("Selected source FormKeys:");
+        foreach (var plan in selected.OrderBy(plan => plan.SourceFormKey.ID))
+        {
+            output.WriteLine(
+                $"  {FormatFormKey(plan.SourceFormKey)} score=0x{plan.Score:X16} winning={plan.WinningState}");
+        }
+
+        if (selected.Length == 0)
+        {
+            output.WriteLine("  <none>");
+        }
+
+        output.WriteLine();
+        output.WriteLine("Patch complete.");
     }
 
     private static string FormatFormKey(FormKey formKey)

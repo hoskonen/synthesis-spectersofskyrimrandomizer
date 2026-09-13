@@ -4,15 +4,18 @@ Specters of Skyrim Randomizer is a Synthesis patcher for
 `SpectersOfSkyrim.esp`. Its goal is to select a small, reproducible subset of
 the mod's hand-placed specter encounters before starting a playthrough.
 
-## Milestone 1: dry-run planning
+## Milestone 2: deterministic patch generation
 
-The current implementation is deliberately read-only. It discovers and
-validates the source encounters, calculates which encounters would be selected,
-and prints their source FormKeys. It creates no ACHR overrides and changes no
-Skyrim records.
+The patcher discovers and validates the source encounters, calculates which
+encounters are selected, and prints their source FormKeys. With `DryRun=true`,
+it remains read-only and creates no ACHR overrides. With `DryRun=false`, it
+generates minimal overrides for rejected encounters.
 
-`DryRun` must remain enabled. Setting it to `false` stops with a clear error
-because mutation has not been implemented yet.
+Each rejected encounter has two validated records: its specter and paired
+skeleton. The patcher forwards each winning load-order record and adds only the
+`InitiallyDisabled` major flag. Selected encounters receive no override. A
+winning record that is already initially disabled also receives no redundant
+override and is reported as skipped.
 
 ## Requirements and settings
 
@@ -53,10 +56,10 @@ including an active `SpectersOfSkyrim.esp`. The extra-data folder should contain
 
 `OutputPath` is required by the Synthesis `run-patcher` protocol even in dry-run
 mode, and its filename should match `ModKey`. Synthesis may write an empty output
-plugin, but this patcher adds no Skyrim records or overrides to it. The console
-prints the complete dry-run summary and the selected source FormKeys in ascending
-local FormID order. Setting `DryRun` to `false` exits with an error stating that
-mutation is not implemented.
+plugin when `DryRun=true`, but this patcher adds no Skyrim records or overrides
+to it. The console prints the complete run summary and the selected source
+FormKeys in ascending local FormID order. Set `DryRun` to `false` to generate the
+patch.
 
 Probability is an independent chance for each encounter, not a requested exact
 count. Five percent of the currently audited 93 encounters is approximately
@@ -100,21 +103,29 @@ must form one unambiguous pair using the containing source cell FormKey plus the
 exact source XYZ position. FormID proximity, enumeration order, and nearest
 distance are never used as fallbacks. Unexpected source schemas stop the run.
 
-The dry run also validates that every source specter still contains
+Every run also validates that every source specter still contains
 `AutomaticLightSwitchScript` with `LightsOnTime = 22` and
 `LightsOffTime = 5`. It never edits or reinterprets that VMAD data; nighttime
 behavior remains wholly owned by Specters of Skyrim.
+
+Mutation uses each paired ACHR's winning full-load-order context, so downstream
+changes such as placement, ownership, flags, enable parents, and VMAD are
+forwarded. Only `InitiallyDisabled` is added. Pair identities always remain
+based on the validated source plugin cell and exact position.
 
 ## Intended use and limitations
 
 This project is intended as a pre-playthrough/new-game randomization tool, not a
 runtime reroll system. It contains no Papyrus or SKSE component.
 
+Rebuild the generated output through Synthesis whenever the settings or load
+order change. Changing the seed or probability is intended primarily before a
+new playthrough; stronger mid-save reroll safety has not been established.
+
 Current limitations:
 
-- Analysis only; no encounters or skeletons are disabled yet
 - Strictly supports the audited 93 + 93 source layout
-- Winning records changed, deleted, or missing in later plugins are reported,
-  but never modified or resurrected
+- Missing, deleted, or structurally unexpected winning records cause apply mode
+  to fail closed and are never manufactured or resurrected
 - No compatibility promise is made for a materially changed future source
   plugin until its schema has been audited
