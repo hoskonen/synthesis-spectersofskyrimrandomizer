@@ -22,6 +22,42 @@ because mutation has not been implemented yet.
 - `Seed` defaults to `38174`; every 32-bit signed integer is valid
 - `DryRun` defaults to `true`
 
+## Manual standalone CLI validation
+
+Build the executable, then invoke its existing Synthesis patcher command with
+the paths for the load order you want to inspect:
+
+```powershell
+dotnet build -c Release
+& ".\SpectersOfSkyrimRandomizer\bin\Release\net10.0\SpectersOfSkyrimRandomizer.exe" `
+  run-patcher `
+  --GameRelease SkyrimSE `
+  --DataFolderPath "<path-to-the-complete-Data-folder>" `
+  --LoadOrderFilePath "<path-to-plugins.txt>" `
+  --ModKey "SpectersOfSkyrimRandomizer.esp" `
+  --OutputPath "<path-to-SpectersOfSkyrimRandomizer.esp>" `
+  --ExtraDataFolder "<path-to-patcher-settings-folder>"
+```
+
+The data folder must expose the complete load order named by `plugins.txt`,
+including an active `SpectersOfSkyrim.esp`. The extra-data folder should contain
+`settings.json`; for example:
+
+```json
+{
+  "Probability": 5.0,
+  "Seed": 38174,
+  "DryRun": true
+}
+```
+
+`OutputPath` is required by the Synthesis `run-patcher` protocol even in dry-run
+mode, and its filename should match `ModKey`. Synthesis may write an empty output
+plugin, but this patcher adds no Skyrim records or overrides to it. The console
+prints the complete dry-run summary and the selected source FormKeys in ascending
+local FormID order. Setting `DryRun` to `false` exits with an error stating that
+mutation is not implemented.
+
 Probability is an independent chance for each encounter, not a requested exact
 count. Five percent of the currently audited 93 encounters is approximately
 five encounters, but a particular seed may select more or fewer. Zero percent

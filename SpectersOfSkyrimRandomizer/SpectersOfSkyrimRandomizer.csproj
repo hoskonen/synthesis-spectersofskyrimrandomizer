@@ -11,4 +11,8 @@
     <PackageReference Include="Mutagen.Bethesda.Skyrim" Version="0.54.4" />
     <PackageReference Include="Mutagen.Bethesda.Synthesis" Version="0.36.6" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpectersOfSkyrimRandomizer.Tests" />
+  </ItemGroup>
 </Project>

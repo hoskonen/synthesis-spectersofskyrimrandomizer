@@ -223,7 +223,7 @@ public static class DryRunPatcher
             : WinningRecordState.UnexpectedBase;
     }
 
-    private static void WriteReport(
+    internal static void WriteReport(
         TextWriter output,
         Settings settings,
         PairingReport pairing,
@@ -234,6 +234,7 @@ public static class DryRunPatcher
         var missing = plans.Count(plan => plan.WinningState == WinningRecordState.Missing);
         var deleted = plans.Count(plan => plan.WinningState == WinningRecordState.Deleted);
         var unexpected = plans.Count(plan => plan.WinningState == WinningRecordState.UnexpectedBase);
+        var missingOrDeleted = missing + deleted;
 
         output.WriteLine("Specters of Skyrim Randomizer — Dry Run");
         output.WriteLine();
@@ -242,10 +243,11 @@ public static class DryRunPatcher
         output.WriteLine($"Probability: {settings.Probability.ToString("0.################", CultureInfo.InvariantCulture)}%");
         output.WriteLine($"Seed: {settings.Seed.ToString(CultureInfo.InvariantCulture)}");
         output.WriteLine();
-        output.WriteLine($"Source specters: {plans.Count}");
+        output.WriteLine($"Source candidates: {plans.Count}");
         output.WriteLine($"Valid encounter pairs: {pairing.ValidPairs.Count}");
         output.WriteLine($"Selected encounters: {selected.Length}");
         output.WriteLine($"Rejected encounters: {rejected}");
+        output.WriteLine($"Missing/deleted winning records: {missingOrDeleted}");
         output.WriteLine($"Missing winning records: {missing}");
         output.WriteLine($"Deleted winning records: {deleted}");
         output.WriteLine($"Unexpected winning records: {unexpected}");
