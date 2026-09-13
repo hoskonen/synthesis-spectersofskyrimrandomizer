@@ -352,3 +352,6 @@ MigrationBackup/
 .idea/
 *.sln.iml
 
+# Custom
+
+docs/
