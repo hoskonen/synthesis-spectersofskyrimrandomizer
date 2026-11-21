@@ -53,6 +53,10 @@ public sealed class PatcherIntegrationTests
                 settings.Seed,
                 settings.Probability));
         Assert.AreEqual((93 - selectedCount) * 2, firstOverrides.Length);
+
+        // Rejected specters must not keep the night script, or it would enable them again.
+        Assert.IsTrue(first.PatchMod.EnumerateMajorRecords<IPlacedNpcGetter>()
+            .All(record => record.VirtualMachineAdapter is null));
     }
 
     private static SynthesisState<ISkyrimMod, ISkyrimModGetter> CreateState()

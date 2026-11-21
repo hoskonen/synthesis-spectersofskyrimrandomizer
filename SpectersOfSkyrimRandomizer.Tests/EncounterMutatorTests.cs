@@ -35,7 +35,7 @@ public sealed class EncounterMutatorTests
     }
 
     [TestMethod]
-    public void WinningDownstreamFieldsMajorFlagsAndVmadAreForwarded()
+    public void WinningDownstreamFieldsAndMajorFlagsAreForwardedAndScriptsRemoved()
     {
         var fixture = CreateFixture();
         fixture.Specter.MajorFlags = PlacedNpc.MajorFlag.Persistent;
@@ -60,12 +60,17 @@ public sealed class EncounterMutatorTests
         Assert.AreEqual(fixture.Specter.Placement.Position, forwarded.Placement!.Position);
         Assert.AreEqual(fixture.Specter.Placement.Rotation, forwarded.Placement.Rotation);
 
-        var script = forwarded.VirtualMachineAdapter!.Scripts.Single();
-        Assert.AreEqual("AutomaticLightSwitchScript", script.Name);
-        Assert.AreEqual(22.0f, script.Properties.OfType<IScriptFloatPropertyGetter>()
-            .Single(property => property.Name == "LightsOnTime").Data);
-        Assert.AreEqual(5.0f, script.Properties.OfType<IScriptFloatPropertyGetter>()
-            .Single(property => property.Name == "LightsOffTime").Data);
+        // The night script would call Enable() on the disabled specter, so it is removed.
+        Assert.IsNull(forwarded.VirtualMachineAdapter);
+
+        // Everything except InitiallyDisabled and the removed scripts equals the winning record.
+        var expected = fixture.Specter.DeepCopy();
+        expected.MajorFlags |= PlacedNpc.MajorFlag.InitiallyDisabled;
+        expected.VirtualMachineAdapter = null;
+        Assert.IsTrue(expected.Equals(forwarded));
+
+        // The source record itself is never modified.
+        Assert.AreEqual("AutomaticLightSwitchScript", fixture.Specter.VirtualMachineAdapter!.Scripts.Single().Name);
     }
 
     [TestMethod]

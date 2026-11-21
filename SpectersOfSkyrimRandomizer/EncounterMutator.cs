@@ -68,6 +68,11 @@ internal static class EncounterMutator
         return result;
     }
 
+    /// <summary>
+    /// Disables a rejected record: adds <c>InitiallyDisabled</c> and removes its reference scripts.
+    /// The specters' AutomaticLightSwitchScript keeps running on a disabled reference and calls
+    /// Enable() every night, so the flag alone does not keep a rejected specter disabled.
+    /// </summary>
     private static bool AddInitiallyDisabled(PlacedNpcContext context, ISkyrimMod patchMod)
     {
         if (context.Record.MajorFlags.HasFlag(PlacedNpc.MajorFlag.InitiallyDisabled))
@@ -77,6 +82,7 @@ internal static class EncounterMutator
 
         var placedNpcOverride = context.GetOrAddAsOverride(patchMod);
         placedNpcOverride.MajorFlags |= PlacedNpc.MajorFlag.InitiallyDisabled;
+        placedNpcOverride.VirtualMachineAdapter = null;
         return true;
     }
 
@@ -116,11 +122,12 @@ internal static class EncounterMutator
         if (result.TotalOverridesWritten != expectedFormKeys.Count ||
             !actualFormKeys.SetEquals(expectedFormKeys) ||
             actualRecords.Any(record =>
-                !record.MajorFlags.HasFlag(PlacedNpc.MajorFlag.InitiallyDisabled)))
+                !record.MajorFlags.HasFlag(PlacedNpc.MajorFlag.InitiallyDisabled) ||
+                record.VirtualMachineAdapter is not null))
         {
             throw new InvalidOperationException(
                 "Mutation invariant violated: generated ACHR overrides do not match rejected, " +
-                "not-already-disabled encounter records.");
+                "not-already-disabled encounter records, or still carry reference scripts.");
         }
     }
 }

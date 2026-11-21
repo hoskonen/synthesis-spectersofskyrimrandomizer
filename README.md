@@ -12,8 +12,9 @@ it remains read-only and creates no ACHR overrides. With `DryRun=false`, it
 generates minimal overrides for rejected encounters.
 
 Each rejected encounter has two validated records: its specter and paired
-skeleton. The patcher forwards each winning load-order record and adds only the
-`InitiallyDisabled` major flag. Selected encounters receive no override. A
+skeleton. The patcher forwards each winning load-order record, adds the
+`InitiallyDisabled` major flag and removes the record's reference scripts (see
+below). Selected encounters receive no override. A
 winning record that is already initially disabled also receives no redundant
 override and is reported as skipped.
 
@@ -105,13 +106,21 @@ distance are never used as fallbacks. Unexpected source schemas stop the run.
 
 Every run also validates that every source specter still contains
 `AutomaticLightSwitchScript` with `LightsOnTime = 22` and
-`LightsOffTime = 5`. It never edits or reinterprets that VMAD data; nighttime
-behavior remains wholly owned by Specters of Skyrim.
+`LightsOffTime = 5`. Selected specters keep that script untouched, so their
+nighttime behavior remains wholly owned by Specters of Skyrim.
 
 Mutation uses each paired ACHR's winning full-load-order context, so downstream
-changes such as placement, ownership, flags, enable parents, and VMAD are
-forwarded. Only `InitiallyDisabled` is added. Pair identities always remain
-based on the validated source plugin cell and exact position.
+changes such as placement, ownership, flags and enable parents are forwarded.
+Two things change in a rejected record's override:
+
+- `InitiallyDisabled` is added.
+- The reference scripts (VMAD) are removed.
+
+The removal is required because `AutomaticLightSwitchScript` keeps running on a
+disabled reference and calls `Enable()` every night at 22:00. With the flag
+alone, a rejected specter would reappear at night. This was confirmed in game,
+and the script removal was then verified in game as well. Pair identities
+always remain based on the validated source plugin cell and exact position.
 
 ## Intended use and limitations
 
@@ -121,6 +130,12 @@ runtime reroll system. It contains no Papyrus or SKSE component.
 Rebuild the generated output through Synthesis whenever the settings or load
 order change. Changing the seed or probability is intended primarily before a
 new playthrough; stronger mid-save reroll safety has not been established.
+
+An existing save keeps the state of every specter it has already loaded. A
+rejected specter that the save has already seen enabled stays enabled, along
+with its running night script; the patch cannot change that. Test from a new
+game, or from `coc` at the main menu. If a save still holds a script instance
+that the patch has since removed, Papyrus only logs a warning.
 
 Current limitations:
 
